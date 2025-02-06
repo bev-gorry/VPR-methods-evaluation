@@ -20,19 +20,21 @@ from PIL import Image
 
 
 def main(args):
-    start_time = datetime.now()
+    # start_time = datetime.now()
 
-    logger.remove()  # Remove possibly previously existing loggers
-    log_dir = Path("logs") / args.log_dir / start_time.strftime("%Y-%m-%d_%H-%M-%S")
-    logger.add(sys.stdout, colorize=True, format="<green>{time:%Y-%m-%d %H:%M:%S}</green> {message}", level="INFO")
-    logger.add(log_dir / "info.log", format="<green>{time:%Y-%m-%d %H:%M:%S}</green> {message}", level="INFO")
-    logger.add(log_dir / "debug.log", level="DEBUG")
-    logger.info(" ".join(sys.argv))
-    logger.info(f"Arguments: {args}")
-    logger.info(
+    # logger.remove()
+    # log_dir = Path("logs") / args.log_dir / start_time.strftime("%Y-%m-%d_%H-%M-%S")
+    # logger.add(sys.stdout, colorize=True, format="<green>{time:%Y-%m-%d %H:%M:%S}</green> {message}", level="INFO")
+    # logger.add(log_dir / "info.log", format="<green>{time:%Y-%m-%d %H:%M:%S}</green> {message}", level="INFO")
+    # logger.add(log_dir / "debug.log", level="DEBUG")
+    # print(" ".join(sys.argv))
+    
+    log_dir = Path(args.log_dir)
+    print(f"Arguments: {args}")
+    print(
         f"Testing with {args.method} with a {args.backbone} backbone and descriptors dimension {args.descriptors_dimension}"
     )
-    logger.info(f"The outputs are being saved in {log_dir}")
+    print(f"The outputs are being saved in {log_dir}")
     
     output_csv = os.path.join(log_dir, 'vpr_results.csv')
     vpr_dir = os.path.join(log_dir, '01_vpr')
@@ -48,7 +50,7 @@ def main(args):
         image_size=args.image_size,
         use_labels=args.use_labels,
     )
-    logger.info(f"Testing on {test_ds}")
+    print(f"Testing on {test_ds}")
 
     with torch.inference_mode():
         # logger.debug("Extracting database descriptors for evaluation/testing")
@@ -76,7 +78,7 @@ def main(args):
     database_descriptors = all_descriptors[: test_ds.num_database]
 
     if args.save_descriptors:
-        # logger.info(f"Saving the descriptors in {log_dir}")
+        # print(f"Saving the descriptors in {log_dir}")
         np.save(log_dir / "queries_descriptors.npy", queries_descriptors)
         np.save(log_dir / "database_descriptors.npy", database_descriptors)
 
@@ -104,7 +106,7 @@ def main(args):
     similarity_file = os.path.join(vpr_dir, f'similarity_matrix.npy')
     np.save(similarity_file, similarity_matrix)
 
-    logger.debug("Calculating recalls")
+    # logger.debug("Calculating recalls")
     distances, predictions = faiss_index.search(queries_descriptors, max(args.recall_values))
 
     # For each query, check if the predictions are correct
@@ -120,7 +122,7 @@ def main(args):
         # Divide by num_queries and multiply by 100, so the recalls are in percentages
         recalls = recalls / test_ds.num_queries * 100
         recalls_str = ", ".join([f"R@{val}: {rec:.1f}" for val, rec in zip(args.recall_values, recalls)])
-        logger.info(recalls_str)
+        print(recalls_str)
 
     if args.num_preds_to_save != 0:
         image_paths, visualisation_img_path = visualizations.save_preds(predictions[:, :args.num_preds_to_save], distances[:, :args.num_preds_to_save], test_ds,

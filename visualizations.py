@@ -145,7 +145,7 @@ def save_preds(predictions, distances, eval_ds, log_dir, output_csv, save_only_w
     image_paths = []
     existing_results = set()
     pred_image_path = None
-    logging.info(f'    Saving predictions and distances to: {output_csv}')
+    print(f'    Saving predictions and distances to: {output_csv}')
     for query_index, preds in enumerate(tqdm(predictions)):
         row_id = get_next_id(output_csv)
         
@@ -158,7 +158,7 @@ def save_preds(predictions, distances, eval_ds, log_dir, output_csv, save_only_w
                 existing_results.update(df['query_path'])
 
             if query_path in existing_results:
-                logging.info(f'    Skipping {os.path.basename(query_path)} as it already exists in the output csv.')
+                print(f'    Skipping {os.path.basename(query_path)} as it already exists in the output csv.')
                 continue
         
         list_of_images_paths = [query_path]
