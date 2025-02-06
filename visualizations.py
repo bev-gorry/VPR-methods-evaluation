@@ -4,6 +4,11 @@ from tqdm import tqdm
 from skimage.transform import rescale
 from PIL import Image, ImageDraw, ImageFont
 
+import os
+import logging
+import pandas as pd
+from pathlib import Path
+
 
 # Height and width of a single image
 H = 512
@@ -81,9 +86,45 @@ def save_file_with_paths(query_path, preds_paths, positives_paths, output_path, 
     with open(output_path, "w") as file:
         _ = file.write("\n".join(file_content))
 
+def get_next_id(output_csv):
+    """Determine the next experiment ID based on the last row in the CSV."""
+    if not Path(output_csv).exists():
+        return 0
+    
+    df = pd.read_csv(output_csv)
+    
+    if df.empty or 'id' not in df.columns:
+        return 0
+    
+    return df['id'].max() + 1
 
-def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_labels=True):
-    """For each query, save an image containing the query and its predictions,
+def build_csv_row(row_id, log_dir, query_path, preds_paths, distances):
+    """Build a row for the CSV as a dictionary for pandas compatibility."""
+    row_data = {
+        'id': row_id,
+        'log_dir': log_dir,
+        'query_path': query_path,
+    }
+    
+    for i, (pred, dist) in enumerate(zip(preds_paths, distances)):
+        row_data[f'pred{i}_path'] = pred
+        row_data[f'dist{i}'] = dist
+    
+    return row_data
+
+def save_vpr_results_to_csv(output_file, row_data):
+    """Save row data to the CSV file using pandas."""
+        
+    output_dir = os.path.dirname(output_file)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    new_data = pd.DataFrame([row_data])
+
+    new_data.to_csv(output_file, mode='a', index=False, header=False) if os.path.exists(output_file) else new_data.to_csv(output_file, mode='w', index=False, header=True)        
+
+
+def save_preds(predictions, distances, eval_ds, log_dir, output_csv, save_only_wrong_preds=None, use_labels=True):
+    '''For each query, save an image containing the query and its predictions,
     and a file with the paths of the query, its predictions and its positives.
 
     Parameters
@@ -94,14 +135,32 @@ def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_la
     log_dir : Path with the path to save the predictions
     save_only_wrong_preds : bool, if True save only the wrongly predicted queries,
         i.e. the ones where the first pred is uncorrect (further than 25 m)
-    """
+    '''
     if use_labels:
         positives_per_query = eval_ds.get_positives()
+    
+    viz_dir = (log_dir / '01_vpr')
+    viz_dir.mkdir(exist_ok=True)
 
-    viz_dir = log_dir / "preds"
-    viz_dir.mkdir()
-    for query_index, preds in enumerate(tqdm(predictions, desc=f"Saving preds in {viz_dir}")):
+    image_paths = []
+    existing_results = set()
+    pred_image_path = None
+    logging.info(f'    Saving predictions and distances to: {output_csv}')
+    for query_index, preds in enumerate(tqdm(predictions)):
+        row_id = get_next_id(output_csv)
+        
         query_path = eval_ds.queries_paths[query_index]
+                
+        if Path(output_csv).exists():
+            df = pd.read_csv(output_csv)
+
+            if 'query_path' in df.columns:
+                existing_results.update(df['query_path'])
+
+            if query_path in existing_results:
+                logging.info(f'    Skipping {os.path.basename(query_path)} as it already exists in the output csv.')
+                continue
+        
         list_of_images_paths = [query_path]
         # List of None (query), True (correct preds) or False (wrong preds)
         preds_correct = [None]
@@ -113,22 +172,23 @@ def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_la
             else:
                 is_correct = None
             preds_correct.append(is_correct)
-
+        
         if save_only_wrong_preds and preds_correct[1]:
             continue
-
+        
         prediction_image = build_prediction_image(list_of_images_paths, preds_correct)
-        pred_image_path = viz_dir / f"{query_index:03d}.jpg"
+        pred_image_path = viz_dir / f'{row_id}_queryindex-{query_index:03d}.jpg'
         prediction_image.save(pred_image_path)
-
+        
         if use_labels:
             positives_paths = [eval_ds.database_paths[idx] for idx in positives_per_query[query_index]]
         else:
             positives_paths = None
-        save_file_with_paths(
-            query_path=list_of_images_paths[0],
-            preds_paths=list_of_images_paths[1:],
-            positives_paths=positives_paths,
-            output_path=viz_dir / f"{query_index:03d}.txt",
-            use_labels=use_labels,
-        )
+        
+        output_data = build_csv_row(row_id, log_dir, list_of_images_paths[0], list_of_images_paths[1:], distances[query_index])
+    
+        save_vpr_results_to_csv(output_csv, output_data)
+
+        image_paths.append(list_of_images_paths)
+        
+    return image_paths, pred_image_path

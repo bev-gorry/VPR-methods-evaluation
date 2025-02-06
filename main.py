@@ -14,6 +14,10 @@ import parser
 import visualizations
 from test_dataset import TestDataset
 
+import os
+import matplotlib.pyplot as plt
+from PIL import Image
+
 
 def main(args):
     start_time = datetime.now()
@@ -29,6 +33,10 @@ def main(args):
         f"Testing with {args.method} with a {args.backbone} backbone and descriptors dimension {args.descriptors_dimension}"
     )
     logger.info(f"The outputs are being saved in {log_dir}")
+    
+    output_csv = os.path.join(log_dir, 'vpr_results.csv')
+    vpr_dir = os.path.join(log_dir, '01_vpr')
+    os.makedirs(vpr_dir, exist_ok=True)
 
     model = vpr_models.get_model(args.method, args.backbone, args.descriptors_dimension)
     model = model.eval().to(args.device)
@@ -43,7 +51,7 @@ def main(args):
     logger.info(f"Testing on {test_ds}")
 
     with torch.inference_mode():
-        logger.debug("Extracting database descriptors for evaluation/testing")
+        # logger.debug("Extracting database descriptors for evaluation/testing")
         database_subset_ds = Subset(test_ds, list(range(test_ds.num_database)))
         database_dataloader = DataLoader(
             dataset=database_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size
@@ -54,7 +62,7 @@ def main(args):
             descriptors = descriptors.cpu().numpy()
             all_descriptors[indices.numpy(), :] = descriptors
 
-        logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
+        # logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
         queries_subset_ds = Subset(
             test_ds, list(range(test_ds.num_database, test_ds.num_database + test_ds.num_queries))
         )
@@ -68,17 +76,36 @@ def main(args):
     database_descriptors = all_descriptors[: test_ds.num_database]
 
     if args.save_descriptors:
-        logger.info(f"Saving the descriptors in {log_dir}")
+        # logger.info(f"Saving the descriptors in {log_dir}")
         np.save(log_dir / "queries_descriptors.npy", queries_descriptors)
         np.save(log_dir / "database_descriptors.npy", database_descriptors)
 
     # Use a kNN to find predictions
     faiss_index = faiss.IndexFlatL2(args.descriptors_dimension)
     faiss_index.add(database_descriptors)
-    del database_descriptors, all_descriptors
+    # del database_descriptors, all_descriptors
+    
+    similarity_matrix = faiss.pairwise_distances(database_descriptors, queries_descriptors)
+
+    # similarity_matrix = np.empty((queries_descriptors.shape[0], database_descriptors.shape[0]), dtype='float32')
+
+    # for i in range(database_descriptors.shape[0]):
+    #     for j in range(queries_descriptors.shape[0]):
+    #         similarity_matrix[i, j] = (np.linalg.norm(database_descriptors[i] - queries_descriptors[j]))
+            
+    # print(f'similarity_matrix: {similarity_matrix.shape}')
+    # print(f'similarity_matrix: {similarity_matrix}')
+
+    # plt.figure(figsize=(10, 10))
+    # plt.imshow(similarity_matrix, cmap='viridis')
+    # plt.colorbar()
+    # plt.show()
+
+    similarity_file = os.path.join(vpr_dir, f'similarity_matrix.npy')
+    np.save(similarity_file, similarity_matrix)
 
     logger.debug("Calculating recalls")
-    _, predictions = faiss_index.search(queries_descriptors, max(args.recall_values))
+    distances, predictions = faiss_index.search(queries_descriptors, max(args.recall_values))
 
     # For each query, check if the predictions are correct
     if args.use_labels:
@@ -95,13 +122,11 @@ def main(args):
         recalls_str = ", ".join([f"R@{val}: {rec:.1f}" for val, rec in zip(args.recall_values, recalls)])
         logger.info(recalls_str)
 
-    # Save visualizations of predictions
     if args.num_preds_to_save != 0:
-        logger.info("Saving final predictions")
-        # For each query save num_preds_to_save predictions
-        visualizations.save_preds(
-            predictions[:, : args.num_preds_to_save], test_ds, log_dir, args.save_only_wrong_preds, args.use_labels
-        )
+        image_paths, visualisation_img_path = visualizations.save_preds(predictions[:, :args.num_preds_to_save], distances[:, :args.num_preds_to_save], test_ds,
+                                log_dir, output_csv, args.save_only_wrong_preds, args.use_labels)
+        if visualisation_img_path is not None:
+            visualisation_img = Image.open(visualisation_img_path)
 
 
 if __name__ == "__main__":
