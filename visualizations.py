@@ -13,8 +13,8 @@ from pathlib import Path
 # Height and width of a single image
 H = 512
 W = 512
-TEXT_H = 175
-FONTSIZE = 50
+TEXT_H = 150
+FONTSIZE = 26
 SPACE = 50  # Space between two images
 
 
@@ -42,12 +42,12 @@ def build_prediction_image(images_paths, preds_correct):
     For each image, if is_correct then draw a green/red box.
     """
     assert len(images_paths) == len(preds_correct)
-    labels = ["Query"]
+    labels = [f"Query\n{os.path.basename(images_paths[0])}"]
     for i, is_correct in enumerate(preds_correct[1:]):
         if is_correct is None:
-            labels.append(f"Pred{i}")
+            labels.append(f"Pred{i}\n{os.path.basename(images_paths[i+1])}")
         else:
-            labels.append(f"Pred{i} - {is_correct}")
+            labels.append(f"Pred{i}\n{os.path.basename(images_paths[i+1])} - {is_correct}")
 
     num_images = len(images_paths)
     images = [np.array(Image.open(path).convert("RGB")) for path in images_paths]
