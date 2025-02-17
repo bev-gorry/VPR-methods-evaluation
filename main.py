@@ -2,6 +2,7 @@ import sys
 import faiss
 import torch
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from loguru import logger
@@ -35,10 +36,14 @@ def main(args):
         f"Testing with {args.method} with a {args.backbone} backbone and descriptors dimension {args.descriptors_dimension}"
     )
     print(f"The outputs are being saved in {log_dir}")
-    
+
     output_csv = os.path.join(log_dir, 'vpr_results.csv')
     vpr_dir = os.path.join(log_dir, '01_vpr')
     os.makedirs(vpr_dir, exist_ok=True)
+    
+    exp_info = f"{args.method}_{args.backbone}_{args.descriptors_dimension}"
+    with open(log_dir / f"vpr_exp_{exp_info}.txt", "w") as f:
+        f.write(exp_info)
 
     model = vpr_models.get_model(args.method, args.backbone, args.descriptors_dimension)
     model = model.eval().to(args.device)
@@ -87,24 +92,41 @@ def main(args):
     faiss_index.add(database_descriptors)
     # del database_descriptors, all_descriptors
     
-    similarity_matrix = faiss.pairwise_distances(database_descriptors, queries_descriptors)
+    # prepare for manual ordering of images for similarity matrix
+    query_path = args.queries_folder.replace('rgb', '')
+    database_path = args.database_folder.replace('rgb', '')
+    
+    queries_rgb_txt_path = os.path.join(query_path, 'rgb.txt')
+    database_rgb_txt_path = os.path.join(database_path, 'rgb.txt')
 
-    # similarity_matrix = np.empty((queries_descriptors.shape[0], database_descriptors.shape[0]), dtype='float32')
-
-    # for i in range(database_descriptors.shape[0]):
-    #     for j in range(queries_descriptors.shape[0]):
-    #         similarity_matrix[i, j] = (np.linalg.norm(database_descriptors[i] - queries_descriptors[j]))
+    query_df = pd.read_csv(queries_rgb_txt_path, sep=' ', header=None)
+    db_df = pd.read_csv(database_rgb_txt_path, sep=' ', header=None)
+    
+    q_indices = []
+    for image in query_df[1]:
+        filename = os.path.join(query_path, image)
+        if filename in test_ds.queries_paths:
+            q_idx = test_ds.queries_paths.index(filename)
+            q_indices.append(q_idx)
             
-    # print(f'similarity_matrix: {similarity_matrix.shape}')
-    # print(f'similarity_matrix: {similarity_matrix}')
-
-    # plt.figure(figsize=(10, 10))
-    # plt.imshow(similarity_matrix, cmap='viridis')
-    # plt.colorbar()
-    # plt.show()
-
-    similarity_file = os.path.join(vpr_dir, f'similarity_matrix.npy')
-    np.save(similarity_file, similarity_matrix)
+    db_indices = []
+    for image in db_df[1]:
+        filename = os.path.join(database_path, image)
+        if filename in test_ds.database_paths:
+            db_idx = test_ds.database_paths.index(filename)
+            db_indices.append(db_idx)
+    
+    distance_matrix = faiss.pairwise_distances(database_descriptors, queries_descriptors)
+    similarity_matrix = 1 / distance_matrix #np.linalg.inv(distance_matrix)
+    similarity_matrix_sorted = np.zeros_like(similarity_matrix)
+    for i, q_idx in enumerate(q_indices):
+        for j, db_idx in enumerate(db_indices):
+            similarity_matrix_sorted[j,i] = similarity_matrix[db_idx, q_idx]
+            
+    dist_outfile = os.path.join(vpr_dir, f'distance_matrix.npy')
+    sim_outfile = os.path.join(vpr_dir, f'similarity_matrix.npy')
+    np.save(dist_outfile, distance_matrix)
+    np.save(sim_outfile, similarity_matrix_sorted)
 
     # logger.debug("Calculating recalls")
     distances, predictions = faiss_index.search(queries_descriptors, max(args.recall_values))
