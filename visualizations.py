@@ -187,7 +187,7 @@ def save_preds(predictions, distances, eval_ds, log_dir, output_csv, save_only_w
         
         output_data = build_csv_row(row_id, log_dir, list_of_images_paths[0], list_of_images_paths[1:], distances[query_index])
     
-        save_vpr_results_to_csv(output_csv, output_data)
+        # save_vpr_results_to_csv(output_csv, output_data)
 
         image_paths.append(list_of_images_paths)
         
