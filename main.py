@@ -40,10 +40,6 @@ def main(args):
     output_csv = os.path.join(log_dir, 'vpr_results.csv')
     vpr_dir = os.path.join(log_dir, '01_vpr')
     os.makedirs(vpr_dir, exist_ok=True)
-    
-    exp_info = f"{args.method}_{args.backbone}_{args.descriptors_dimension}"
-    with open(log_dir / f"vpr_exp_{exp_info}.txt", "w") as f:
-        f.write(exp_info)
 
     model = vpr_models.get_model(args.method, args.backbone, args.descriptors_dimension)
     model = model.eval().to(args.device)
