@@ -1,23 +1,27 @@
-import parser
+import os
 import sys
-from datetime import datetime
-from pathlib import Path
 
 import faiss
 import numpy as np
 import torch
+import parser
+
+import matplotlib.pyplot as plt
+
+from tqdm import tqdm
+from PIL import Image
+from pathlib import Path
 from loguru import logger
+from datetime import datetime
+
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
-from tqdm import tqdm
 
-import visualizations
 import vpr_models
+import visualizations
+
 from test_dataset import TestDataset
 
-import os
-import matplotlib.pyplot as plt
-from PIL import Image
 
 
 def main(args):
