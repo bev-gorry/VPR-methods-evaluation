@@ -5,7 +5,6 @@ from skimage.transform import rescale
 from PIL import Image, ImageDraw, ImageFont
 
 import os
-import logging
 import pandas as pd
 from pathlib import Path
 
@@ -14,7 +13,7 @@ from pathlib import Path
 H = 512
 W = 512
 TEXT_H = 150
-FONTSIZE = 26
+FONTSIZE = 25
 SPACE = 50  # Space between two images
 
 
@@ -42,12 +41,12 @@ def build_prediction_image(images_paths, preds_correct):
     For each image, if is_correct then draw a green/red box.
     """
     assert len(images_paths) == len(preds_correct)
-    labels = [f"Query\n{os.path.basename(images_paths[0])}"]
+    labels = [f"Query\n{os.path.basename(images_paths[0]).partition('.')[0]}"]
     for i, is_correct in enumerate(preds_correct[1:]):
         if is_correct is None:
-            labels.append(f"Pred{i}\n{os.path.basename(images_paths[i+1])}")
+            labels.append(f"Pred{i}\n{os.path.basename(images_paths[i+1]).partition('.')[0]}")
         else:
-            labels.append(f"Pred{i}\n{os.path.basename(images_paths[i+1])} - {is_correct}")
+            labels.append(f"Pred{i}\n{os.path.basename(images_paths[i+1]).partition('.')[0]} - {is_correct}")
 
     num_images = len(images_paths)
     images = [np.array(Image.open(path).convert("RGB")) for path in images_paths]
@@ -140,7 +139,7 @@ def save_preds(predictions, distances, eval_ds, log_dir, output_csv, save_only_w
         positives_per_query = eval_ds.get_positives()
     
     viz_dir = (log_dir / '01_vpr')
-    viz_dir.mkdir(exist_ok=True)
+    # viz_dir.mkdir(exist_ok=True)
 
     image_paths = []
     existing_results = set()
@@ -176,9 +175,9 @@ def save_preds(predictions, distances, eval_ds, log_dir, output_csv, save_only_w
         if save_only_wrong_preds and preds_correct[1]:
             continue
         
-        prediction_image = build_prediction_image(list_of_images_paths, preds_correct)
-        pred_image_path = viz_dir / f'{row_id}_queryindex-{query_index:03d}.jpg'
-        prediction_image.save(pred_image_path)
+        # prediction_image = build_prediction_image(list_of_images_paths, preds_correct)
+        # pred_image_path = viz_dir / f'{row_id}_queryindex-{query_index:03d}.jpg'
+        # prediction_image.save(pred_image_path)
         
         if use_labels:
             positives_paths = [eval_ds.database_paths[idx] for idx in positives_per_query[query_index]]

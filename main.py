@@ -21,7 +21,7 @@ from PIL import Image
 
 
 def main(args):
-    # start_time = datetime.now()
+    start_time = datetime.now()
 
     # logger.remove()
     # log_dir = Path("logs") / args.log_dir / start_time.strftime("%Y-%m-%d_%H-%M-%S")
@@ -38,8 +38,7 @@ def main(args):
     print(f"The outputs are being saved in {log_dir}")
 
     output_csv = os.path.join(log_dir, 'vpr_results.csv')
-    vpr_dir = os.path.join(log_dir, '01_vpr')
-    os.makedirs(vpr_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
 
     model = vpr_models.get_model(args.method, args.backbone, args.descriptors_dimension)
     model = model.eval().to(args.device)
@@ -119,8 +118,8 @@ def main(args):
         for j, db_idx in enumerate(db_indices):
             similarity_matrix_sorted[j,i] = similarity_matrix[db_idx, q_idx]
             
-    dist_outfile = os.path.join(vpr_dir, f'distance_matrix.npy')
-    sim_outfile = os.path.join(vpr_dir, f'similarity_matrix.npy')
+    dist_outfile = os.path.join(log_dir, f'{args.method.lower()}_distance_matrix.npy')
+    sim_outfile = os.path.join(log_dir, f'{args.method.lower()}_similarity_matrix.npy')
     np.save(dist_outfile, distance_matrix)
     np.save(sim_outfile, similarity_matrix_sorted)
 
@@ -147,7 +146,10 @@ def main(args):
                                 log_dir, output_csv, args.save_only_wrong_preds, args.use_labels)
         if visualisation_img_path is not None:
             visualisation_img = Image.open(visualisation_img_path)
-
+    
+    end_time = datetime.now()
+    
+    print(f"ELAPSED: {end_time - start_time}")
 
 if __name__ == "__main__":
     args = parser.parse_arguments()
