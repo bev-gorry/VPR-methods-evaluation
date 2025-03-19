@@ -12,18 +12,16 @@ def read_images_paths(dataset_folder):
     """Find images within 'dataset_folder'. If the file
     'dataset_folder'_images_paths.txt exists, read paths from such file.
     Otherwise, use glob(). Keeping the paths in the file speeds up computation,
-    because using glob over large folders might be slow.
+    because using glob over very large folders might be slow.
 
     Parameters
     ----------
-    dataset_folder : str, folder containing JPEG images
+    dataset_folder : str, folder containing images
 
     Returns
     -------
-    images_paths : list[str], paths of JPEG images within dataset_folder
+    images_paths : list[str], paths of images within dataset_folder
     """
-    
-    allowed_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff']
 
     if not os.path.exists(dataset_folder):
         raise FileNotFoundError(f"Folder {dataset_folder} does not exist")
@@ -43,16 +41,11 @@ def read_images_paths(dataset_folder):
             )
     else:
         print(f"Searching test images in {dataset_folder} with glob()")
-        # images_paths = sorted(glob(f"{dataset_folder}/**/*.jpg", recursive=True))
-        images_paths = []
-        for ext in allowed_extensions:
-            images_paths.extend(glob(f"{dataset_folder}/**/*{ext}", recursive=True))
-            images_paths.extend(glob(f"{dataset_folder}/**/*{ext.upper()}", recursive=True))
+        images_paths = sorted(glob(f"{dataset_folder}/**/*", recursive=True))
+        images_paths = [p for p in images_paths if os.path.isfile(p) and os.path.splitext(p)[1].lower() in [".jpg", ".jpeg", ".png"]]
         images_paths = sorted(images_paths)
         if len(images_paths) == 0:
-            raise FileNotFoundError(f"Directory {dataset_folder} does not contain any JPEG images")
-        
-    print(f"Found {len(images_paths)} images within {dataset_folder}.")
+            raise FileNotFoundError(f"Directory {dataset_folder} does not contain any images")
     return images_paths
 
 

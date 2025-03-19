@@ -1,17 +1,12 @@
 import os
-import sys
-
-import faiss
-import numpy as np
 import torch
+import faiss
 import parser
-
-import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 from tqdm import tqdm
-from PIL import Image
 from pathlib import Path
-from loguru import logger
 from datetime import datetime
 
 from torch.utils.data import DataLoader
@@ -23,25 +18,17 @@ import visualizations
 from test_dataset import TestDataset
 
 
-
 def main(args):
     start_time = datetime.now()
 
-    # logger.remove()
-    # log_dir = Path("logs") / args.log_dir / start_time.strftime("%Y-%m-%d_%H-%M-%S")
-    # logger.add(sys.stdout, colorize=True, format="<green>{time:%Y-%m-%d %H:%M:%S}</green> {message}", level="INFO")
-    # logger.add(log_dir / "info.log", format="<green>{time:%Y-%m-%d %H:%M:%S}</green> {message}", level="INFO")
-    # logger.add(log_dir / "debug.log", level="DEBUG")
-    # print(" ".join(sys.argv))
-    
     log_dir = Path(args.log_dir)
+    
     print(f"Arguments: {args}")
     print(
         f"Testing with {args.method} with a {args.backbone} backbone and descriptors dimension {args.descriptors_dimension}"
     )
     print(f"The outputs are being saved in {log_dir}")
 
-    output_csv = os.path.join(log_dir, 'vpr_results.csv')
     os.makedirs(log_dir, exist_ok=True)
 
     model = vpr_models.get_model(args.method, args.backbone, args.descriptors_dimension)
@@ -57,7 +44,6 @@ def main(args):
     print(f"Testing on {test_ds}")
 
     with torch.inference_mode():
-        # logger.debug("Extracting database descriptors for evaluation/testing")
         database_subset_ds = Subset(test_ds, list(range(test_ds.num_database)))
         database_dataloader = DataLoader(
             dataset=database_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size
@@ -68,7 +54,6 @@ def main(args):
             descriptors = descriptors.cpu().numpy()
             all_descriptors[indices.numpy(), :] = descriptors
 
-        # logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
         queries_subset_ds = Subset(
             test_ds, list(range(test_ds.num_database, test_ds.num_database + test_ds.num_queries))
         )
@@ -82,7 +67,7 @@ def main(args):
     database_descriptors = all_descriptors[: test_ds.num_database]
 
     if args.save_descriptors:
-        # print(f"Saving the descriptors in {log_dir}")
+        print(f"Saving the descriptors in {log_dir}")
         np.save(log_dir / "queries_descriptors.npy", queries_descriptors)
         np.save(log_dir / "database_descriptors.npy", database_descriptors)
 
@@ -116,7 +101,7 @@ def main(args):
             db_indices.append(db_idx)
     
     distance_matrix = faiss.pairwise_distances(database_descriptors, queries_descriptors)
-    similarity_matrix = 1 / distance_matrix #np.linalg.inv(distance_matrix)
+    similarity_matrix = 1 / distance_matrix
     similarity_matrix_sorted = np.zeros_like(similarity_matrix)
     for i, q_idx in enumerate(q_indices):
         for j, db_idx in enumerate(db_indices):
@@ -127,10 +112,9 @@ def main(args):
     np.save(dist_outfile, distance_matrix)
     np.save(sim_outfile, similarity_matrix_sorted)
 
-    # logger.debug("Calculating recalls")
-    distances, predictions = faiss_index.search(queries_descriptors, max(args.recall_values))
+    _, predictions = faiss_index.search(queries_descriptors, max(args.recall_values))
 
-    # For each query, check if the predictions are correct
+    # for each query, check if the predictions are correct
     if args.use_labels:
         positives_per_query = test_ds.get_positives()
         recalls = np.zeros(len(args.recall_values))
@@ -140,16 +124,17 @@ def main(args):
                     recalls[i:] += 1
                     break
 
-        # Divide by num_queries and multiply by 100, so the recalls are in percentages
+        # divide by num_queries and multiply by 100, so the recalls are in percentages
         recalls = recalls / test_ds.num_queries * 100
         recalls_str = ", ".join([f"R@{val}: {rec:.1f}" for val, rec in zip(args.recall_values, recalls)])
         print(recalls_str)
 
+    # save predictions
     if args.num_preds_to_save != 0:
-        image_paths, visualisation_img_path = visualizations.save_preds(predictions[:, :args.num_preds_to_save], distances[:, :args.num_preds_to_save], test_ds,
-                                log_dir, output_csv, args.save_only_wrong_preds, args.use_labels)
-        if visualisation_img_path is not None:
-            visualisation_img = Image.open(visualisation_img_path)
+        print("Saving final predictions")
+        visualizations.save_preds(
+            predictions[:, : args.num_preds_to_save], test_ds, log_dir, args.save_only_wrong_preds, args.use_labels
+        )
     
     end_time = datetime.now()
     
